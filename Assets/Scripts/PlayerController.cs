@@ -97,6 +97,7 @@ public class PlayerController : MonoBehaviour
         }
         if(other.gameObject.CompareTag("Hazard"))
         {
+            Time.timeScale = 0;
             Debug.Log("you lose");
         }
     }
