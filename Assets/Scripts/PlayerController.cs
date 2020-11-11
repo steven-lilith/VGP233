@@ -3,66 +3,102 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-public class PlayerController : MonoBehaviour,IDamageable
+public class PlayerController : MonoBehaviour
 {
-    public Gun weaponPrefab1;
-    public Gun weaponPrefab2;
-    private Gun weaponEquipped;
-    public CharacterController controller;
-    public float speed = 12.0f;
-    public float gravity = -9.81f;
-    public float jumpHeight = 2.0f;
-    public Vector3 velocity;
-    public Transform groungCheck;
-    public float groundDistance;
-    public LayerMask groundMask;
-    bool isGrounded;
+    public enum JumpState
+    {
+        Grounded,
+        Jumping,
+    }
+    public float speed = 10.0f;
+    public float jumpForce = 1000.0f;
+    public int score;
+    private Rigidbody rb;
+    private UIManager uiManager;
+    private JumpState jumpState = JumpState.Grounded;
 
     private void Awake()
     {
-        weaponEquipped = weaponPrefab1;
-        weaponPrefab1.gameObject.SetActive(true);
-        weaponPrefab2.gameObject.SetActive(false);
+        uiManager = FindObjectOfType<UIManager>();
+        ServiceLocator.Register<UIManager>(uiManager);
     }
-    private void Update()
+    void Start()
     {
-        isGrounded = Physics.CheckSphere(groungCheck.position, groundDistance, groundMask);
-        if(isGrounded&& velocity.y <0.0f)
-        {
-            velocity.y = -2.0f;
-        }
-        
-        float x = Input.GetAxis("Horizontal");
-        float z = Input.GetAxis("Vertical");
-
-        Vector3 move = transform.right * x + transform.forward * z;
-        controller.Move(move * speed * Time.deltaTime);
-        if(Input.GetButtonDown("Jump") && isGrounded)
-        {
-            velocity.y = Mathf.Sqrt(jumpHeight * 2.0f * gravity);
-        }
-        if(Input.GetButtonDown("Fire1"))
-        {
-            weaponEquipped.Shoot();
-        }
-        if(Input.GetKeyDown(KeyCode.Alpha1))
-        {
-            weaponEquipped = weaponPrefab1;
-            weaponPrefab1.gameObject.SetActive(true);
-            weaponPrefab2.gameObject.SetActive(false);
-        }
-        if (Input.GetKeyDown(KeyCode.Alpha2))
-        {
-            weaponEquipped = weaponPrefab2;
-            weaponPrefab1.gameObject.SetActive(false);
-            weaponPrefab2.gameObject.SetActive(true);
-        }
-        velocity.y += gravity * Time.deltaTime;
-        controller.Move(velocity * Time.deltaTime);
+        rb = GetComponent<Rigidbody>();
+        score = 0;
     }
 
-    public void TakeDamage(float damage)
+
+    // Update is called once per frame
+    void Update()
     {
-        ServiceLocator.Get<GameManager>().takeDamage((int)damage);
+        Jump();
+    }
+
+    private void FixedUpdate()
+    {
+        if(score == 100)
+        {
+            Debug.Log("You win!");
+        }
+        Move();
+    }
+    private void Move()
+    {
+        float moveHorizontal = Input.GetAxis("Horizontal");
+        float moveVertical = Input.GetAxis("Vertical");
+    
+
+        Vector3 movement = new Vector3(moveHorizontal * speed, 0.0f, moveVertical * speed);
+        rb.AddForce(movement);
+    }
+
+    private void Jump()
+    {
+        float jumpValue = Input.GetKeyDown(KeyCode.Space) ? jumpForce : 0.0f;
+        switch(jumpState)
+        {
+            case JumpState.Grounded:
+                if(jumpValue>0.0f)
+                {
+                    jumpState = JumpState.Jumping;
+                }
+                break;
+            case JumpState.Jumping:
+                if(jumpValue>0.0f)
+                {
+                    jumpValue = 0.0f;
+                }
+                break;
+        }
+        Vector3 jumping = new Vector3(0.0f, jumpValue, 0.0f);
+        rb.AddForce(jumping);
+    }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+       
+        if(jumpState==JumpState.Jumping && collision.gameObject.CompareTag("Ground"))
+        {
+            jumpState = JumpState.Grounded;
+        }
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (other.gameObject.CompareTag("PickUp"))
+        {
+            PickUp pickUp = other.gameObject.GetComponent<PickUp>();
+            if(pickUp!=null)
+            {
+                score += pickUp.Collect();
+                ServiceLocator.Get<UIManager>().UpdateScoreDisplay(score);
+            }
+        }
+        if(other.gameObject.CompareTag("Hazard"))
+        {
+            Time.timeScale = 0;
+            Debug.Log("you lose");
+        }
     }
 }
