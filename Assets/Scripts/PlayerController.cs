@@ -3,102 +3,66 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
-public class PlayerController : MonoBehaviour
+public class PlayerController : MonoBehaviour,IDamageable
 {
-    public enum JumpState
-    {
-        Grounded,
-        Jumping,
-    }
-    public float speed = 10.0f;
-    public float jumpForce = 1000.0f;
-    public int score;
-    private Rigidbody rb;
-    private UIManager uiManager;
-    private JumpState jumpState = JumpState.Grounded;
+    public Gun weaponPrefab1;
+    public Gun weaponPrefab2;
+    private Gun weaponEquipped;
+    public CharacterController controller;
+    public float speed = 12.0f;
+    public float gravity = -9.81f;
+    public float jumpHeight = 2.0f;
+    public Vector3 velocity;
+    public Transform groungCheck;
+    public float groundDistance;
+    public LayerMask groundMask;
+    bool isGrounded;
 
     private void Awake()
     {
-        uiManager = FindObjectOfType<UIManager>();
-        ServiceLocator.Register<UIManager>(uiManager);
+        weaponEquipped = weaponPrefab1;
+        weaponPrefab1.gameObject.SetActive(true);
+        weaponPrefab2.gameObject.SetActive(false);
     }
-    void Start()
+    private void Update()
     {
-        rb = GetComponent<Rigidbody>();
-        score = 0;
-    }
-
-
-    // Update is called once per frame
-    void Update()
-    {
-        Jump();
-    }
-
-    private void FixedUpdate()
-    {
-        if(score == 100)
+        isGrounded = Physics.CheckSphere(groungCheck.position, groundDistance, groundMask);
+        if(isGrounded&& velocity.y <0.0f)
         {
-            Debug.Log("You win!");
+            velocity.y = -2.0f;
         }
-        Move();
-    }
-    private void Move()
-    {
-        float moveHorizontal = Input.GetAxis("Horizontal");
-        float moveVertical = Input.GetAxis("Vertical");
-    
+        
+        float x = Input.GetAxis("Horizontal");
+        float z = Input.GetAxis("Vertical");
 
-        Vector3 movement = new Vector3(moveHorizontal * speed, 0.0f, moveVertical * speed);
-        rb.AddForce(movement);
-    }
-
-    private void Jump()
-    {
-        float jumpValue = Input.GetKeyDown(KeyCode.Space) ? jumpForce : 0.0f;
-        switch(jumpState)
+        Vector3 move = transform.right * x + transform.forward * z;
+        controller.Move(move * speed * Time.deltaTime);
+        if(Input.GetButtonDown("Jump") && isGrounded)
         {
-            case JumpState.Grounded:
-                if(jumpValue>0.0f)
-                {
-                    jumpState = JumpState.Jumping;
-                }
-                break;
-            case JumpState.Jumping:
-                if(jumpValue>0.0f)
-                {
-                    jumpValue = 0.0f;
-                }
-                break;
+            velocity.y = Mathf.Sqrt(jumpHeight * 2.0f * gravity);
         }
-        Vector3 jumping = new Vector3(0.0f, jumpValue, 0.0f);
-        rb.AddForce(jumping);
+        if(Input.GetButtonDown("Fire1"))
+        {
+            weaponEquipped.Shoot();
+        }
+        if(Input.GetKeyDown(KeyCode.Alpha1))
+        {
+            weaponEquipped = weaponPrefab1;
+            weaponPrefab1.gameObject.SetActive(true);
+            weaponPrefab2.gameObject.SetActive(false);
+        }
+        if (Input.GetKeyDown(KeyCode.Alpha2))
+        {
+            weaponEquipped = weaponPrefab2;
+            weaponPrefab1.gameObject.SetActive(false);
+            weaponPrefab2.gameObject.SetActive(true);
+        }
+        velocity.y += gravity * Time.deltaTime;
+        controller.Move(velocity * Time.deltaTime);
     }
 
-    private void OnCollisionEnter(Collision collision)
+    public void TakeDamage(float damage)
     {
-       
-        if(jumpState==JumpState.Jumping && collision.gameObject.CompareTag("Ground"))
-        {
-            jumpState = JumpState.Grounded;
-        }
-    }
-
-    private void OnTriggerEnter(Collider other)
-    {
-        if (other.gameObject.CompareTag("PickUp"))
-        {
-            PickUp pickUp = other.gameObject.GetComponent<PickUp>();
-            if(pickUp!=null)
-            {
-                score += pickUp.Collect();
-                ServiceLocator.Get<UIManager>().UpdateScoreDisplay(score);
-            }
-        }
-        if(other.gameObject.CompareTag("Hazard"))
-        {
-            Time.timeScale = 0;
-            Debug.Log("you lose");
-        }
+        ServiceLocator.Get<GameManager>().takeDamage((int)damage);
     }
 }
